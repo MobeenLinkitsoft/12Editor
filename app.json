@@ -1,0 +1,10 @@
+{
+  "name": "CustomEditorApp",
+  "displayName": "CustomEditorApp",
+  "expo": {
+    "android": {
+      "package": "com.example.app",
+      "permissions": ["CAMERA", "WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"]
+    }
+  }
+}
