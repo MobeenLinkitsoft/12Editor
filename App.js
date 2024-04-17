@@ -496,7 +496,8 @@ const App = () => {
       const overlayMaps = textOverlayList.map((overlay, index) => `[t${index + 1}]`).join('');
 
       // Construct the FFmpeg command
-      const ffmpegCommand = `-i ${localUri} -vf ${filterComplex} -codec:a copy ${downloadDir}/${newFileName}`;
+      // const ffmpegCommand = `-i ${localUri} -filter_complex drawtext="fontfile=/system/fonts/Roboto-Regular.ttf:text=okkkkkkkkkk:fontcolor=white:fontsize=90:x=50:y=50" -codec:a copy ${downloadDir}/${newFileName}`;
+      const ffmpegCommand = `-i ${localUri} -filter_complex "drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='First Text':fontcolor=white:fontsize=90:x=50:y=50,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='Second Text':fontcolor=white:fontsize=90:x=50:y=100" -codec:a copy ${downloadDir}/${newFileName}`;
 
       // const ffmpegCommand = `-i ${localUri} -vf  ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -codec:a copy ${downloadDir}/${newFileName}`;
 
@@ -891,7 +892,7 @@ const styles = StyleSheet.create({
     top: 20, // Adjust the top position as needed
     left: 20, // Adjust the left position as needed
     // backgroundColor: "red",
-    padding:5
+    padding: 5
   },
   overlayText: {
     fontSize: 25,
