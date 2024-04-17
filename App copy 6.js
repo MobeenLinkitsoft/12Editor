@@ -27,7 +27,7 @@ const App = () => {
   const [muteOriginalSound, setMuteOriginalSound] = useState(false); // State to track muting original sound
   const [externalAudioUri, setExternalAudioUri] = useState(null);
   const [check, setCheck] = useState(0)
-  const [colorText, setcolorText] = useState('white');
+  const [addedVideoUri, setAddedVideoUri] = useState(null);
 
   const videoContainerRef = useRef(null);
 
@@ -446,72 +446,71 @@ const App = () => {
   //   }
   // };
 
-  const downloadVideo = async () => {
-    // Check if video URI exists
-    if (!videoUri) {
-      Alert.alert('No video to download!');
-      return;
-    }
+  // const downloadVideo = async () => {
+  //   // Check if video URI exists
+  //   if (!videoUri) {
+  //     Alert.alert('No video to download!');
+  //     return;
+  //   }
 
-    const isPermissionGranted = await checkWriteExternalStoragePermission();
-    if (!isPermissionGranted) {
-      const permissionGranted = await requestWriteExternalStoragePermission();
-      if (!permissionGranted) {
-        Alert.alert('Permission denied. Cannot download video.');
-        return;
-      }
-    }
+  //   const isPermissionGranted = await checkWriteExternalStoragePermission();
+  //   if (!isPermissionGranted) {
+  //     const permissionGranted = await requestWriteExternalStoragePermission();
+  //     if (!permissionGranted) {
+  //       Alert.alert('Permission denied. Cannot download video.');
+  //       return;
+  //     }
+  //   }
 
-    // Extract file extension and generate new file name
-    const localUri = videoUri.replace('file://', '');
-    const fileExtension = localUri.split('.').pop();
-    const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
-    const newFileName = `${datetime}overlayed_video.${fileExtension}`;
-    // Specify download directory
-    const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+  //   // Extract file extension and generate new file name
+  //   const localUri = videoUri.replace('file://', '');
+  //   const fileExtension = localUri.split('.').pop();
+  //   const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+  //   const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+  //   // Specify download directory
+  //   const downloadDir = `${RNFS.DownloadDirectoryPath}`;
 
-    try {
-      // Check if download directory exists, if not, create it
-      const dirExists = await RNFS.exists(downloadDir);
-      if (!dirExists) {
-        await RNFS.mkdir(downloadDir);
-      }
+  //   try {
+  //     // Check if download directory exists, if not, create it
+  //     const dirExists = await RNFS.exists(downloadDir);
+  //     if (!dirExists) {
+  //       await RNFS.mkdir(downloadDir);
+  //     }
 
-      // Get the absolute path to the font file
-      const fontPath = require('./assets/OpenSans.ttf');
+  //     // Get the absolute path to the font file
+  //     const fontPath = require('./assets/OpenSans.ttf');
 
-      // Construct FFmpeg filter_complex string with dynamic text overlay filters
-      let filterComplex = '';
+  //     // Construct FFmpeg filter_complex string with dynamic text overlay filters
+  //     let filterComplex = '';
 
-      // Loop through each text overlay in textOverlayList
-      textOverlayList.forEach((overlay, index) => {
-        const text = overlay.text;
-        const position = overlay.position;
+  //     // Loop through each text overlay in textOverlayList
+  //     textOverlayList.forEach((overlay, index) => {
+  //       const text = overlay.text;
+  //       const position = overlay.position;
 
-        // Add text overlay filter for each text item
-        filterComplex += `drawtext="fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=90:x=${position.x}:y=${position.y}"`;
-      });
+  //       // Add text overlay filter for each text item
+  //       filterComplex += `drawtext="fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=red:fontsize=90:x=${position.x}:y=${position.y}"`;
+  //     });
 
-      // Combine overlay maps
-      const overlayMaps = textOverlayList.map((overlay, index) => `[t${index + 1}]`).join('');
+  //     // Combine overlay maps
+  //     const overlayMaps = textOverlayList.map((overlay, index) => `[t${index + 1}]`).join('');
 
-      // Construct the FFmpeg command
-      const ffmpegCommand = `-i ${localUri} -vf ${filterComplex} -codec:a copy ${downloadDir}/${newFileName}`;
+  //     // Construct the FFmpeg command
+  //     const ffmpegCommand = `-i ${localUri} -vf ${filterComplex} -codec:a copy ${downloadDir}/${newFileName}`;
 
-      // const ffmpegCommand = `-i ${localUri} -vf  ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -codec:a copy ${downloadDir}/${newFileName}`;
+  //     // Execute FFmpeg command
+  //     await FFmpegKit.executeAsync(ffmpegCommand);
+  //     // Execute FFmpeg command
 
-      // Execute FFmpeg command
-      await FFmpegKit.executeAsync(ffmpegCommand);
-      // Execute FFmpeg command
+  //     // Display success message
+  //     console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+  //   } catch (error) {
+  //     // Log and display error message
+  //     console.error('Error saving video:', error);
+  //     Alert.alert('Failed to download video!');
+  //   }
+  // };
 
-      // Display success message
-      console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
-    } catch (error) {
-      // Log and display error message
-      console.error('Error saving video:', error);
-      Alert.alert('Failed to download video!');
-    }
-  };
 
 
   const selectVideoFromLibrary = () => {
@@ -646,7 +645,7 @@ const App = () => {
                   > */}
 
                   {overlay.text && (
-                    <Text style={[styles.overlayText, { color: colorText }]}>{overlay.text}</Text>
+                    <Text style={styles.overlayText}>{overlay.text}</Text>
                   )}
                   {/* {overlay.image && (
                       <Image source={{ uri: overlay.image }} style={{ width: 100, height: 100 }} />
@@ -736,16 +735,13 @@ const App = () => {
 
             <View style={{ width: "100%", flexDirection: "row", height: 50, justifyContent: "center", alignItems: "center" }}>
               <View style={{ flex: 1, alignSelf: "center", justifyContent: "center", alignItems: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: "red", width: 50, height: 50 }} onPress={() => setcolorText("red")}></TouchableOpacity>
+                <View style={{ backgroundColor: "red", width: 50, height: 50 }}></View>
               </View>
               <View style={{ flex: 1, alignSelf: "center", justifyContent: "center", alignItems: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: "green", width: 50, height: 50 }} onPress={() => setcolorText("green")}></TouchableOpacity>
+                <View style={{ backgroundColor: "green", width: 50, height: 50 }}></View>
               </View>
               <View style={{ flex: 1, alignSelf: "center", justifyContent: "center", alignItems: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: "blue", width: 50, height: 50 }} onPress={() => setcolorText("blue")}></TouchableOpacity>
-              </View>
-              <View style={{ flex: 1, alignSelf: "center", justifyContent: "center", alignItems: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: "black", width: 50, height: 50 }} onPress={() => setcolorText("black")}></TouchableOpacity>
+                <View style={{ backgroundColor: "blue", width: 50, height: 50 }}></View>
               </View>
             </View>
 
@@ -890,12 +886,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 20, // Adjust the top position as needed
     left: 20, // Adjust the left position as needed
-    // backgroundColor: "red",
-    padding:5
+    backgroundColor: "red",
   },
   overlayText: {
     fontSize: 25,
     fontWeight: 'bold',
+    color: 'white',
   },
   addButton: {
     position: 'absolute',
