@@ -295,7 +295,161 @@ const App = () => {
     }
   };
 
-  const downloadVideoONe = async () => {
+
+  // const downloadVideo = async () => {
+
+  //   // Check if video URI exists
+  //   if (!videoUri) {
+  //     Alert.alert('No video to download!');
+  //     return;
+  //   }
+
+  //   const isPermissionGranted = await checkWriteExternalStoragePermission();
+  //   if (!isPermissionGranted) {
+  //     const permissionGranted = await requestWriteExternalStoragePermission();
+  //     if (!permissionGranted) {
+  //       Alert.alert('Permission denied. Cannot download video.');
+  //       return;
+  //     }
+  //   }
+
+  //   // Extract file extension and generate new file name
+  //   const localUri = videoUri.replace('file://', '');
+  //   const fileExtension = localUri.split('.').pop();
+  //   const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+  //   const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+  //   // Specify download directory
+  //   const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+
+  //   try {
+  //     // Check if download directory exists, if not, create it
+  //     const dirExists = await RNFS.exists(downloadDir);
+  //     if (!dirExists) {
+  //       await RNFS.mkdir(downloadDir);
+  //     }
+
+  //     // Generate a random filename
+  //     const rand = Math.floor(100000 + Math.random() * 900000);
+
+  //     // Construct FFmpeg filter_complex string with dynamic image overlay filters
+  //     let filterComplex = '';
+
+  //     // Loop through each image overlay in textOverlayList
+  //     textOverlayList.forEach((overlay, index) => {
+  //       const imagePath = overlay.image;
+  //       const position = overlay.position;
+  //       const overlayInput = `-i ${imagePath}`;
+
+  //       filterComplex += `[${index + 1}:v]scale=100:100[t${index + 1}];${index == 0 ? `[0:v]` : `[v${index}]`}[t${index + 1}]overlay=x=${position.x}:y=${position.y}[v${index + 1}]${index !== textOverlayList.length - 1 ? ';' : ''}`
+  //     });
+
+  //     textOverlayList.forEach((overlay, index) => {
+  //       const text = overlay.text;
+  //       const position = overlay.position;
+
+  //       // Add text overlay filter for each text item
+  //       filterComplex += `[0:v]drawtext=text='${text}':x=${position.x}:y=${position.y}:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5[v${index + 1}];`;
+  //     });
+
+  //     // Combine overlay maps
+  //     const overlayMap = `[v${textOverlayList.length}]`; // Adjusted to use the correct index
+  //     const overlayMaps = textOverlayList.map((overlay, index) => `[t${index + 1}]`).join('');
+
+  //     // Construct the FFmpeg command
+  //     // const ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p -t 6.1 ${downloadDir}/${newFileName}`;
+  //     // const ffmpegCommand = `-y -i ${localUri} -filter_complex "${filterComplex}${overlayMap}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${newFileName}`;
+  //     const ffmpegCommand = `-y -i ${localUri} -filter_complex "${filterComplex}${overlayMaps}overlay=x=0:y=0[v]" -map "[v]" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${newFileName}`;
+
+  //     // Execute FFmpeg command
+  //     await FFmpegKit.executeAsync(ffmpegCommand);
+
+  //     Timer()
+
+  //     // Display success message
+  //     console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+  //   } catch (error) {
+  //     // Log and display error message
+  //     console.error('Error saving video:', error);
+  //     Alert.alert('Failed to download video!');
+  //   }
+  // };
+
+  // const downloadVideo = async () => {
+  //   // Check if video URI exists
+  //   if (!videoUri) {
+  //     Alert.alert('No video to download!');
+  //     return;
+  //   }
+
+  //   const isPermissionGranted = await checkWriteExternalStoragePermission();
+  //   if (!isPermissionGranted) {
+  //     const permissionGranted = await requestWriteExternalStoragePermission();
+  //     if (!permissionGranted) {
+  //       Alert.alert('Permission denied. Cannot download video.');
+  //       return;
+  //     }
+  //   }
+
+  //   // Extract file extension and generate new file name
+  //   const localUri = videoUri.replace('file://', '');
+  //   const fileExtension = localUri.split('.').pop();
+  //   const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+  //   const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+  //   // Specify download directory
+  //   const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+  //   const fontAsset = './assets/OpenSans.ttf'
+  //   // const fontPath = fontAsset.localUri || fontAsset.uri;
+
+  //   const fontPath = require('./assets/OpenSans.ttf');
+
+  //   try {
+  //     // Check if download directory exists, if not, create it
+  //     const dirExists = await RNFS.exists(downloadDir);
+  //     if (!dirExists) {
+  //       await RNFS.mkdir(downloadDir);
+  //     }
+
+  //     // Construct FFmpeg filter_complex string with dynamic text overlay filters
+  //     let filterComplex = '';
+
+  //     // Loop through each text overlay in textOverlayList
+  //     textOverlayList.forEach((overlay, index) => {
+  //       const text = overlay.text;
+  //       const position = overlay.position;
+  //       // const fontPath = '/path/to/your/font.ttf'; // Specify the path to your font file
+
+  //       // Add text overlay filter for each text item
+  //       filterComplex += `[0:v]drawtext=text='Hello':x=${position.x}:y=${position.y}:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5:[t${index + 1}];`;
+  //     });
+
+  //     // Combine overlay maps
+  //     const overlayMaps = textOverlayList.map((overlay, index) => `[t${index + 1}]`).join('');
+
+  //     // Construct the FFmpeg command
+  //     // const ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p -t 6.1 ${downloadDir}/${newFileName}`;
+  //     // const ffmpegCommand = `-y -i ${localUri} -filter_complex "${filterComplex}${overlayMaps}overlay=x=0:y=0[v]" -map "[v]" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${newFileName}`;
+  //     // const ffmpegCommand = `-i ${localUri} -filter_complex drawtext=fontfile=montserrat:text='Hello' ${downloadDir}/${newFileName}`;
+  //     const ffmpegCommand = `-y -i ${localUri} -vf "drawtext=fontfile='${fontPath}':text='My text starting at 640x360'::x=640:y=360:fontsize=24:fontcolor=white" -crf 28  -c:a aac -strict -2 -map "[0vl]" -map 2:a -shortest ${downloadDir}/${newFileName}`;
+
+  //     // const ffmpegCommand = `-i ${localUri}  -vf "drawtext=text='© Krishna':fontfile=${'./assets/Times New Roman.ttf'}:x=(main_w-text_w-10):y=(main_h-text_h-10):fontsize=32:fontcolor=black:box=1:boxcolor=white@0.5:boxborderw=5" ${downloadDir}/${newFileName}`;
+
+  //     // const ffmpegCommand = `-i ${localUri} -vf drawtext=text='Hello':fontcolor=white:fontsize=40:box=1:boxcolor=black@0.6:boxborderw=200:x=(w-text_w)/2:y=(h-text_h)/2 -c:a copy ${downloadDir}/${newFileName}`;
+  //     // console.log("----------------")
+  //     // Execute FFmpeg command
+  //     await FFmpegKit.executeAsync(ffmpegCommand);
+
+  //     // Timer();
+
+  //     // Display success message
+  //     console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+  //   } catch (error) {
+  //     // Log and display error message
+  //     console.error('Error saving video:', error);
+  //     Alert.alert('Failed to download video!');
+  //   }
+  // };
+
+  const downloadVideo = async () => {
     // Check if video URI exists
     if (!videoUri) {
       Alert.alert('No video to download!');
@@ -328,57 +482,52 @@ const App = () => {
 
       // Construct FFmpeg filter_complex string with dynamic text overlay filters
       let filterComplex = '';
-      let overlayInputs = '';
-      let overlayMaps = '';
       let imageCount = 0;
       let textCount = 0;
+      let overlayInputs = '';
       const rand = Math.floor(100000 + Math.random() * 900000);
 
-      // Loop through each overlay in textOverlayList
+      // Loop through each text overlay in textOverlayList
       textOverlayList.forEach((overlay, index) => {
         if (overlay.image) {
           const imagePath = overlay.image;
           const position = overlay.position;
-          const overlayInput = `-i ${imagePath}${imageCount > 0 ? ' ' : ''
-            } `;
+          const overlayInput = `-i ${imagePath}`;
           overlayInputs += overlayInput;
-          filterComplex += `[${index + 1}:v]scale=100:100[t${index + 1}];${index == 0 ? `[0:v]` : `[v${index}]`}[t${index + 1}]overlay=x=${position.x}:y=${position.y}[v${index + 1}]${index !== textOverlayList.length - 1 ? ';' : ''}`
 
-          // filterComplex += `${imageCount === 0 && textCount === 0 ? '' : ';'}[${index + 1}:v]scale=200:200[t${index}];${imageCount === 0 && textCount === 0 ? '[0:v]' : `[v${index}]`}[t${index+1}]overlay=x=${position.x}:y=${position.y}[v${index + 1}]${index !== textOverlayList.length - 1 ? ';' : ''}`;
-          overlayMaps += `[v${index}]`;
+          filterComplex += `[${index + 1}:v]scale=200:200[t${index + 1}];${index == 0 ? `[0:v]` : `[v${index}]`}[t${index + 1}]overlay=x=${position.x}:y=${position.y}[v${index + 1}]${index !== textOverlayList.length - 1 ? ';' : ''}`
           imageCount++;
-        } else if (overlay.text) {
+        }
+
+        else if (overlay.text) {
+
           const text = overlay.text;
           const position = overlay.position;
 
           // Add text overlay filter for each text item
-          // filterComplex += `${imageCount === 0 && textCount === 0 ? '' : ';'}[${index}:v]drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}`;
           filterComplex += `drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}${index !== textOverlayList.length - 1 ? ',' : ''}`;
-          overlayMaps += `[v${index}]`;
           textCount++;
         }
       });
 
-      const overlayMap = `[v${textOverlayList.length}]`; // Adjusted to use the correct index
+      const overlayMap = `[v${textOverlayList.length}]`;
 
       // Construct the FFmpeg command
       let ffmpegCommand;
-      if (imageCount > 0) {
-        console.log("ffmpegCommand================================2",)
+      if (imageCount > 0 && textCount > 0) {
+        // If both image and text overlays exist
+        ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}${overlayMap}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
+      } else if (imageCount > 0) {
         // If only image overlays exist
         ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p -t 6.1 ${downloadDir}/${rand + newFileName}`;
-        // ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p -t 6.1 ${downloadDir}/${rand + newFileName}`;
       } else if (textCount > 0) {
-        console.log("ffmpegCommand================================3",)
         // If only text overlays exist
         ffmpegCommand = `-i ${localUri} -filter_complex "${filterComplex}" -codec:a copy -q:v 4 -q:a 4 ${downloadDir}/${newFileName}`;
       } else {
-        console.log("ffmpegCommand================================4",)
         // If no overlays exist
         ffmpegCommand = `-y -i ${localUri} -c copy ${downloadDir}/${newFileName}`;
       }
 
-      console.log("ffmpegCommand", ffmpegCommand)
       // Execute FFmpeg command
       await FFmpegKit.executeAsync(ffmpegCommand);
 
@@ -390,119 +539,6 @@ const App = () => {
       Alert.alert('Failed to download video!');
     }
   };
-
-
-  const downloadVideoBoth = async () => {
-    // Check if video URI exists
-    if (!videoUri) {
-      Alert.alert('No video to download!');
-      return;
-    }
-
-    const isPermissionGranted = await checkWriteExternalStoragePermission();
-    if (!isPermissionGranted) {
-      const permissionGranted = await requestWriteExternalStoragePermission();
-      if (!permissionGranted) {
-        Alert.alert('Permission denied. Cannot download video.');
-        return;
-      }
-    }
-
-    // Extract file extension and generate new file name
-    const localUri = videoUri.replace('file://', '');
-    const fileExtension = localUri.split('.').pop();
-    const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
-    const newFileName = `${datetime}overlayed_video.${fileExtension}`;
-    // Specify download directory
-    const downloadDir = `${RNFS.DownloadDirectoryPath}`;
-
-    try {
-      // Check if download directory exists, if not, create it
-      const dirExists = await RNFS.exists(downloadDir);
-      if (!dirExists) {
-        await RNFS.mkdir(downloadDir);
-      }
-
-      // Construct FFmpeg filter_complex string with dynamic text and image overlay filters
-      let filterComplex = '';
-      let overlayInputs = '';
-      let imageCount = 0;
-      let textCount = 0;
-      let countss = 0;
-      const rand = Math.floor(100000 + Math.random() * 900000);
-
-      const textOverlays = textOverlayList.filter(overlay => overlay.text);
-      const imageOverlays = textOverlayList.filter(overlay => overlay.image);
-
-      let textFilterComplex = '';
-      textOverlays.forEach((overlay, index) => {
-        const text = overlay.text;
-        const position = overlay.position;
-
-        textFilterComplex += `[${countss}:v]drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}[v${countss}]${countss > textFilterComplex.length - 1 ? ',' : ';'}`;
-        countss++;
-        textCount++;
-      });
-
-      let imageFilterComplex = '';
-      imageOverlays.forEach((overlay, index) => {
-        const imagePath = overlay.image;
-        const position = overlay.position;
-        const overlayInput = `-i ${imagePath}${index > 0 ? '' : ''} `;
-        overlayInputs += overlayInput;
-
-        imageFilterComplex += `[${countss}:v]scale=100:100[t${countss}];[v${countss - 1}][t${countss}]overlay=x=${position.x}:y=${position.y}[v${countss}]${countss > imageFilterComplex.length - 1 ? ';' : ''}`;
-        countss++;
-        imageCount++;
-      });
-
-      // Construct the FFmpeg command
-
-        // If no overlays ex      let ffmpegCommand;
-      if (imageCount > 0 || textCount > 0) {
-        // If image or text overlays exist
-        ffmpegCommand = `-y -i ${localUri} ${overlayInputs} -filter_complex "${textFilterComplex}${imageFilterComplex}" -map "[v${countss - 1}]" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
-      } else {ist
-        ffmpegCommand = `-y -i ${localUri} -c copy ${downloadDir}/${rand + newFileName}`;
-      }
-
-      // Execute FFmpeg command
-      console.log("ffmpegCommand==============", ffmpegCommand);
-      await FFmpegKit.executeAsync(ffmpegCommand);
-
-      // Display success message
-      console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
-    } catch (error) {
-      // Log and display error message
-      console.error('Error saving video:', error);
-      Alert.alert('Failed to download video!');
-    }
-  };
-
-
-
-  const downloadVideo = () => {
-
-    let hasImages = false;
-    let hasTexts = false;
-    textOverlayList.forEach((overlay) => {
-      if (overlay.image) {
-        hasImages = true;
-      } else if (overlay.text) {
-        hasTexts = true;
-      }
-    });
-
-    if (hasImages && hasTexts) {
-      downloadVideoBoth();
-    } else if (hasImages) {
-      downloadVideoONe();
-    }
-    else if (hasTexts) {
-      downloadVideoONe();
-    }
-
-  }
 
 
   const selectVideoFromLibrary = () => {

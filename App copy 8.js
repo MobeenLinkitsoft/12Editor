@@ -295,6 +295,100 @@ const App = () => {
     }
   };
 
+
+
+  // const downloadVideo = async () => {
+  //   // Check if video URI exists
+  //   if (!videoUri) {
+  //     Alert.alert('No video to download!');
+  //     return;
+  //   }
+
+  //   const isPermissionGranted = await checkWriteExternalStoragePermission();
+  //   if (!isPermissionGranted) {
+  //     const permissionGranted = await requestWriteExternalStoragePermission();
+  //     if (!permissionGranted) {
+  //       Alert.alert('Permission denied. Cannot download video.');
+  //       return;
+  //     }
+  //   }
+
+  //   // Extract file extension and generate new file name
+  //   const localUri = videoUri.replace('file://', '');
+  //   const fileExtension = localUri.split('.').pop();
+  //   const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+  //   const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+  //   // Specify download directory
+  //   const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+
+  //   try {
+  //     // Check if download directory exists, if not, create it
+  //     const dirExists = await RNFS.exists(downloadDir);
+  //     if (!dirExists) {
+  //       await RNFS.mkdir(downloadDir);
+  //     }
+
+  //     // Construct FFmpeg filter_complex string with dynamic text overlay filters
+  //     let filterComplex = '';
+  //     let imageCount = 0;
+  //     let textCount = 0;
+  //     let overlayInputs = '';
+  //     const rand = Math.floor(100000 + Math.random() * 900000);
+
+  //     // Loop through each text overlay in textOverlayList
+  //     textOverlayList.forEach((overlay, index) => {
+  //       if (overlay.image) {
+  //         const imagePath = overlay.image;
+  //         const position = overlay.position;
+  //         const overlayInput = `-i ${imagePath}`;
+  //         overlayInputs += overlayInput;
+
+  //         filterComplex += `[${index + 1}:v]scale=200:200[t${index + 1}];${index == 0 ? `[0:v]` : `[v${index}]`}[t${index + 1}]overlay=x=${position.x}:y=${position.y}[v${index + 1}]${index !== textOverlayList.length - 1 ? ';' : ''}`
+  //         imageCount++;
+  //       }
+
+  //       else if (overlay.text) {
+
+  //         const text = overlay.text;
+  //         const position = overlay.position;
+
+  //         // Add text overlay filter for each text item
+  //         filterComplex += `drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}${index !== textOverlayList.length - 1 ? ',' : ''}`;
+  //         textCount++;
+  //       }
+  //     });
+
+  //     const overlayMap = `[v${textOverlayList.length}]`;
+
+  //     // Construct the FFmpeg command
+  //     let ffmpegCommand;
+  //     if (imageCount > 0 && textCount > 0) {
+  //       // If both image and text overlays exist
+  //       ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}${overlayMap}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
+  //     } else if (imageCount > 0) {
+  //       // If only image overlays exist
+  //       ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => `-i ${overlay.image}`).join(' ')} -filter_complex "${filterComplex}" -map "${overlayMap}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p -t 6.1 ${downloadDir}/${rand + newFileName}`;
+  //     } else if (textCount > 0) {
+  //       // If only text overlays exist
+  //       ffmpegCommand = `-i ${localUri} -filter_complex "${filterComplex}" -codec:a copy -q:v 4 -q:a 4 ${downloadDir}/${newFileName}`;
+  //     } else {
+  //       // If no overlays exist
+  //       ffmpegCommand = `-y -i ${localUri} -c copy ${downloadDir}/${newFileName}`;
+  //     }
+
+  //     // Execute FFmpeg command
+  //     await FFmpegKit.executeAsync(ffmpegCommand);
+
+  //     // Display success message
+  //     console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+  //   } catch (error) {
+  //     // Log and display error message
+  //     console.error('Error saving video:', error);
+  //     Alert.alert('Failed to download video!');
+  //   }
+  // };
+
+
   const downloadVideoONe = async () => {
     // Check if video URI exists
     if (!videoUri) {
@@ -391,7 +485,6 @@ const App = () => {
     }
   };
 
-
   const downloadVideoBoth = async () => {
     // Check if video URI exists
     if (!videoUri) {
@@ -423,52 +516,54 @@ const App = () => {
         await RNFS.mkdir(downloadDir);
       }
 
-      // Construct FFmpeg filter_complex string with dynamic text and image overlay filters
+      // Construct FFmpeg filter_complex string with dynamic text overlay filters
       let filterComplex = '';
       let overlayInputs = '';
+      let overlayMaps = '';
       let imageCount = 0;
       let textCount = 0;
-      let countss = 0;
       const rand = Math.floor(100000 + Math.random() * 900000);
 
-      const textOverlays = textOverlayList.filter(overlay => overlay.text);
-      const imageOverlays = textOverlayList.filter(overlay => overlay.image);
+      // First pass: add image overlays
+      textOverlayList.forEach((overlay, index) => {
+        if (overlay.image) {
+          const imagePath = overlay.image;
+          const position = overlay.position;
+          const overlayInput = `-i ${imagePath}`;
+          overlayInputs += overlayInput;
 
-      let textFilterComplex = '';
-      textOverlays.forEach((overlay, index) => {
-        const text = overlay.text;
-        const position = overlay.position;
-
-        textFilterComplex += `[${countss}:v]drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}[v${countss}]${countss > textFilterComplex.length - 1 ? ',' : ';'}`;
-        countss++;
-        textCount++;
+          filterComplex += `${imageCount === 0 && textCount === 0 ? '' : ';'}[${index}:v]scale=200:200[t${index}];${imageCount === 0 && textCount === 0 ? '[0:v]' : `[v${index - 1}]`}[t${index}]overlay=x=${position.x}:y=${position.y}[v${index}]`;
+          overlayMaps += `[v${index}]`;
+          imageCount++;
+        }
       });
 
-      let imageFilterComplex = '';
-      imageOverlays.forEach((overlay, index) => {
-        const imagePath = overlay.image;
-        const position = overlay.position;
-        const overlayInput = `-i ${imagePath}${index > 0 ? '' : ''} `;
-        overlayInputs += overlayInput;
+      // Second pass: add text overlays
+      textOverlayList.forEach((overlay, index) => {
+        if (overlay.text) {
+          const text = overlay.text;
+          const position = overlay.position;
 
-        imageFilterComplex += `[${countss}:v]scale=100:100[t${countss}];[v${countss - 1}][t${countss}]overlay=x=${position.x}:y=${position.y}[v${countss}]${countss > imageFilterComplex.length - 1 ? ';' : ''}`;
-        countss++;
-        imageCount++;
+          // Add text overlay filter for each text item
+          filterComplex += `${imageCount === 0 && textCount === 0 ? '' : ';'}[${index}:v]drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}[v${index}]`;
+          overlayMaps += `[v${index}]`;
+          textCount++;
+        }
       });
 
       // Construct the FFmpeg command
-
-        // If no overlays ex      let ffmpegCommand;
+      let ffmpegCommand;
       if (imageCount > 0 || textCount > 0) {
         // If image or text overlays exist
-        ffmpegCommand = `-y -i ${localUri} ${overlayInputs} -filter_complex "${textFilterComplex}${imageFilterComplex}" -map "[v${countss - 1}]" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
-      } else {ist
+        ffmpegCommand = `-y -i ${localUri} ${overlayInputs} -filter_complex "${filterComplex}" -map "${overlayMaps}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
+      } else {
+        // If no overlays exist
         ffmpegCommand = `-y -i ${localUri} -c copy ${downloadDir}/${rand + newFileName}`;
       }
 
+      console.log("ffmpegCommand", ffmpegCommand)
       // Execute FFmpeg command
-      console.log("ffmpegCommand==============", ffmpegCommand);
-      await FFmpegKit.executeAsync(ffmpegCommand);
+      // await FFmpegKit.executeAsync(ffmpegCommand);
 
       // Display success message
       console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
@@ -478,8 +573,6 @@ const App = () => {
       Alert.alert('Failed to download video!');
     }
   };
-
-
 
   const downloadVideo = () => {
 
