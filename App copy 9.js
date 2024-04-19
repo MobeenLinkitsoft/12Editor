@@ -224,7 +224,7 @@ const App = () => {
       // Define FFmpeg command to concatenate the videos
       const command = `-f concat -safe 0 -i ${fileListPath} -c copy ${mergedVideoPath}`;
 
-      Timer('Video Merged Successfully!')
+      Timer()
       // Execute FFmpeg command
       await FFmpegKit.executeAsync(command);
 
@@ -245,7 +245,7 @@ const App = () => {
 
   const [progress, setProgress] = useState(0);
 
-  const Timer = (mxg) => {
+  const Timer = () => {
     const totalTime = 10000; // 10 seconds in milliseconds
     let currentTime = 0;
 
@@ -255,7 +255,7 @@ const App = () => {
       setProgress(newProgress);
 
       if (currentTime >= totalTime) {
-        Alert.alert(mxg)
+        Alert.alert('Video downloaded successfully!')
         clearInterval(timer);
       }
     }, 100);
@@ -379,7 +379,6 @@ const App = () => {
       }
 
       console.log("ffmpegCommand", ffmpegCommand)
-      Timer("Video Downloaded!")
       // Execute FFmpeg command
       await FFmpegKit.executeAsync(ffmpegCommand);
 
@@ -392,6 +391,90 @@ const App = () => {
     }
   };
 
+
+  // const downloadVideoBoth = async () => {
+  //   // Check if video URI exists
+  //   if (!videoUri) {
+  //     Alert.alert('No video to download!');
+  //     return;
+  //   }
+
+  //   const isPermissionGranted = await checkWriteExternalStoragePermission();
+  //   if (!isPermissionGranted) {
+  //     const permissionGranted = await requestWriteExternalStoragePermission();
+  //     if (!permissionGranted) {
+  //       Alert.alert('Permission denied. Cannot download video.');
+  //       return;
+  //     }
+  //   }
+
+  //   // Extract file extension and generate new file name
+  //   const localUri = videoUri.replace('file://', '');
+  //   const fileExtension = localUri.split('.').pop();
+  //   const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+  //   const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+  //   // Specify download directory
+  //   const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+
+  //   try {
+  //     // Check if download directory exists, if not, create it
+  //     const dirExists = await RNFS.exists(downloadDir);
+  //     if (!dirExists) {
+  //       await RNFS.mkdir(downloadDir);
+  //     }
+
+  //     // Construct FFmpeg filter_complex string with dynamic text and image overlay filters
+  //     let filterComplex = '';
+  //     let overlayInputs = '';
+  //     let imageCount = 0;
+  //     let textCount = 0;
+  //     let countss = 0;
+  //     const rand = Math.floor(100000 + Math.random() * 900000);
+
+  //     const textOverlays = textOverlayList.filter(overlay => overlay.text);
+  //     const imageOverlays = textOverlayList.filter(overlay => overlay.image);
+
+  //     let textFilterComplex = '';
+  //     textOverlays.forEach((overlay, index) => {
+  //       const text = overlay.text;
+  //       const position = overlay.position;
+
+  //       textFilterComplex += `[${countss}:v]drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=${colorText}:fontsize=${textSize}:x=${position.x}:y=${position.y}[v${countss}]${countss > textFilterComplex.length - 1 ? ',' : ';'}`;
+  //       countss++;
+  //       textCount++;
+  //     });
+
+  //     let imageFilterComplex = '';
+  //     imageOverlays.forEach((overlay, index) => {
+  //       const imagePath = overlay.image;
+  //       const position = overlay.position;
+  //       const overlayInput = `-i ${imagePath}${index > 0 ? '' : ''} `;
+  //       overlayInputs += overlayInput;
+
+  //       imageFilterComplex += `[${countss}:v]scale=100:100[t${countss}];[v${countss - 1}][t${countss}]overlay=x=${position.x}:y=${position.y}[v${countss}]${countss > imageFilterComplex.length - 1 ? ';' : ''}`;
+  //       countss++;
+  //       imageCount++;
+  //     });
+
+  //     // Construct the FFmpeg command
+
+  //     // If no overlays ex  
+  //     let ffmpegCommand;
+
+  //     ffmpegCommand = `-y -i ${localUri} -i ${textOverlayList[0]?.image} -i ${textOverlayList[1]?.image} -filter_complex "[1:v]scale=100:100[ovrl1];[2:v]scale=100:100[ovrl2];[0:v][ovrl1]overlay=x=10:y=10[bg];[bg][ovrl2]overlay=x=80:y=80,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='First Text Overlay':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=(h-text_h)/2,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='Second Text Overlay':fontcolor=white:fontsize=50:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=(h-text_h)/3,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='Third Text Overlay':fontcolor=white:fontsize=50:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/3:y=(h-text_h)/3" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
+
+  //     // Execute FFmpeg command
+  //     console.log("ffmpegCommand==============", ffmpegCommand);
+  //     await FFmpegKit.executeAsync(ffmpegCommand);
+
+  //     // Display success message
+  //     console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+  //   } catch (error) {
+  //     // Log and display error message
+  //     console.error('Error saving video:', error);
+  //     Alert.alert('Failed to download video!');
+  //   }
+  // };
 
   const downloadVideoBoth = async () => {
     // Check if video URI exists
@@ -465,8 +548,6 @@ const App = () => {
       // ffmpegCommand = `-y -i ${localUri} -i ${textOverlayList[0]?.image} -i ${textOverlayList[1]?.image} -i ${textOverlayList[2]?.image} -filter_complex "[1:v]scale=100:100[ovrl1];[2:v]scale=100:100[ovrl2];[3:v]scale=100:100[ovrl3];[0:v][ovrl1]overlay=x=10:y=10[bg1];[bg1][ovrl2]overlay=x=80:y=80[bg2];[bg2][ovrl3]overlay=x=150:y=150,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='First Text Overlay':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=(h-text_h)/2,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='Second Text Overlay':fontcolor=white:fontsize=50:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=(h-text_h)/3,drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text='Third Text Overlay':fontcolor=white:fontsize=50:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/3:y=(h-text_h)/3" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
 
       // Execute FFmpeg command
-      Timer("Video Downloaded!")
-
       console.log("ffmpegCommand==============", ffmpegCommand);
       await FFmpegKit.executeAsync(ffmpegCommand);
 
@@ -498,9 +579,6 @@ const App = () => {
       downloadVideoONe();
     }
     else if (hasTexts) {
-      downloadVideoONe();
-    } else {
-
       downloadVideoONe();
     }
 
@@ -592,16 +670,14 @@ const App = () => {
         // Adjust the FFmpeg command to replace the original audio with the selected audio and mute the original audio
         const ffmpegCommand = `-i ${videoPath} -i ${audioPath} -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -strict experimental -shortest ${outputPath}`;
 
-        Timer('Audio replaced successfully!')
         await FFmpegKit.executeAsync(ffmpegCommand);
-
         setTimeout(() => {
           const outputExists = RNFS.exists(`file://${outputPath}`);
           if (outputExists) {
             // Set the video URI to the output path
             setVideoUri(`file://${outputPath}`);
             // Alert.alert('Audio replaced successfully!');
-            // Alert.alert('Audio replaced successfully!');
+            Alert.alert('Audio replaced successfully!');
           } else {
             Alert.alert('Failed to replace audio. Output file does not exist.');
           }        // console.log("outputPath", outputPath)
@@ -773,27 +849,13 @@ const App = () => {
             )}
           </View>
         ) : (
-          check === 0 && (
-            <>
-              <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                <Text style={{ fontSize: 20, color: "black", fontWeight: 800 }}>Welcome to 12ee Video Editor App </Text>
-              </View>
-
-              <View style={{ flex: 3, justifyContent: "center", alignContent: "center", flexDirection: "row", alignItems: "center" }}>
-                <TouchableOpacity style={{ flex: 1, width: "100%", height: 100, justifyContent: "center", alignItems: "center" }} onPress={selectVideoFromLibrary}>
-                  <Image source={{ uri: 'https://static.thenounproject.com/png/1425326-200.png' }} resizeMode='contain' style={{ width: 100, height: 100 }} />
-                  <Text style={{ fontSize: 20, color: "black" }}>Select Video</Text>
-                </TouchableOpacity>
-
-                <View style={{ paddingVertical: 10 }}></View>
-                {/* <Button title="Select Image" onPress={() => { }} /> */}
-                <View style={{ paddingVertical: 10 }}></View>
-                <TouchableOpacity style={{ flex: 1, width: "100%", height: 100, justifyContent: "center", alignItems: "center" }} onPress={recordvideo}>
-                  <Image source={{ uri: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQazmivuQhs1BJsOI5sLWQ3yIvbn6LMOUukwWg5Go8cmw&s' }} resizeMode='contain' style={{ width: 100, height: 100 }} />
-                  <Text style={{ fontSize: 20, color: "black" }}>Record Video</Text>
-                </TouchableOpacity>
-              </View>
-            </>
+          check === 0 && (<View style={{ flex: 1, justifyContent: "center", alignContent: "center", }}>
+            <Button title="Select Video" onPress={selectVideoFromLibrary} />
+            <View style={{ paddingVertical: 10 }}></View>
+            {/* <Button title="Select Image" onPress={() => { }} /> */}
+            <View style={{ paddingVertical: 10 }}></View>
+            <Button title="Record Video" onPress={recordvideo} />
+          </View>
           )
 
         )}
