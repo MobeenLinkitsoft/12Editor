@@ -1,25 +1,37 @@
 import React, { useState, useRef, useEffect, forwardRef } from 'react';
-import { View, Text, Button, TouchableOpacity, StyleSheet, TextInput, Modal, PanResponder, Image, NativeEventEmitter, NativeModules, Alert, PermissionsAndroid } from 'react-native';
+import { View, Text, Button, TouchableOpacity, StyleSheet, TextInput, Modal, PanResponder, Image, NativeEventEmitter, NativeModules, Alert, PermissionsAndroid, ScrollView, Dimensions } from 'react-native';
 import { RNCamera } from 'react-native-camera';
 import Video from 'react-native-video';
 import { showEditor } from 'react-native-video-trim';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-import * as FileSystem from 'expo-file-system';
 import RNFS from 'react-native-fs';
 import DocumentPicker from 'react-native-document-picker';
-import { FFmpegKit } from 'ffmpeg-kit-react-native';
-import { PinchGestureHandler, State } from 'react-native-gesture-handler';
-import Animated, { Value, event, set } from 'react-native-reanimated';
-import RNFetchBlob from 'rn-fetch-blob';
-import { Asset } from 'expo-asset';
+import { FFmpegKit, ReturnCode } from 'ffmpeg-kit-react-native';
+import FFmpegWrapper from './FFmpegWrapper';
 
+const SCREEN_WIDTH = Dimensions.get('screen').width;
+const SCREEN_HEIGHT = Dimensions.get('screen').height;
+export const FRAME_PER_SEC = 1;
+export const FRAME_WIDTH = 80;
+const TILE_HEIGHT = 80;
+const TILE_WIDTH = FRAME_WIDTH / 2; // to get a 2x resolution
+
+const DURATION_WINDOW_DURATION = 4;
+const DURATION_WINDOW_BORDER_WIDTH = 4;
+const DURATION_WINDOW_WIDTH =
+  DURATION_WINDOW_DURATION * FRAME_PER_SEC * TILE_WIDTH;
+const POPLINE_POSITION = '50%';
+
+const FRAME_STATUS = Object.freeze({
+  LOADING: { name: Symbol('LOADING') },
+  READY: { name: Symbol('READY') },
+});
 
 const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSeconds, setRecordedSeconds] = useState(0);
   const cameraRef = useRef(null);
   const [videoUri, setVideoUri] = useState(null);
-  const [isTrimming, setIsTrimming] = useState(false);
   const [isAddingText, setIsAddingText] = useState(false);
   const [textOverlayList, setTextOverlayList] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -30,7 +42,10 @@ const App = () => {
   const [colorText, setcolorText] = useState('white');
   const [textSize, setTextSize] = useState(16);
 
+  const [secondVideo, setsecondVideo] = useState(null);
+
   const videoContainerRef = useRef(null);
+  const videoPlayerRef = useRef();
 
   useEffect(() => {
     let timer;
@@ -184,6 +199,31 @@ const App = () => {
   };
 
 
+  const addVideoOverVideo = () => {
+    const options = {
+      mediaType: 'video',
+      videoQuality: 'high',
+    };
+
+    // Launch the video picker
+    launchImageLibrary(options, (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled video picker');
+      } else if (response.error) {
+        console.log('Video picker error: ', response.error);
+      } else {
+        // Get the URI of the selected video
+        let selectedVideoUri = response.uri || response.assets?.[0]?.uri;
+        setTextOverlayList([...textOverlayList, { video: selectedVideoUri, position: { x: 20, y: 20 } }]);
+
+        setTimeout(() => {
+          setsecondVideo(selectedVideoUri)
+        }, 2000);
+        // Merge the selected video with the current video
+      }
+    });
+  }
+
   const addVideoOnVideo = () => {
     const options = {
       mediaType: 'video',
@@ -228,10 +268,22 @@ const App = () => {
       // Execute FFmpeg command
       await FFmpegKit.executeAsync(command);
 
-      // Set the videoUri state to the URI of the merged video
       setTimeout(() => {
         setVideoUri(`file://${mergedVideoPath}`);
+
       }, 4000);
+
+      const mergedVideoDuration = await new Promise((resolve, reject) => {
+        videoPlayerRef.current.seek(0);
+        videoPlayerRef.current.setOnSeekCompleteCallback(() => {
+          const duration = videoPlayerRef.current.getDuration();
+          resolve(duration);
+        });
+      });
+      // Set the videoUri state to the URI of the merged video
+      setTimeout(() => {
+        handleVideoLoad(mergedVideoDuration)
+      }, 5000);
 
       // Display success message
       console.log('Videos merged successfully!');
@@ -480,15 +532,96 @@ const App = () => {
   };
 
 
+  const downloadVideowithVideo = async () => {
+    // Check if video URI exists
+    if (!videoUri) {
+      Alert.alert('No video to download!');
+      return;
+    }
+
+    const isPermissionGranted = await checkWriteExternalStoragePermission();
+    if (!isPermissionGranted) {
+      const permissionGranted = await requestWriteExternalStoragePermission();
+      if (!permissionGranted) {
+        Alert.alert('Permission denied. Cannot download video.');
+        return;
+      }
+    }
+
+    // Extract file extension and generate new file name
+    const localUri = videoUri.replace('file://', '');
+    const fileExtension = localUri.split('.').pop();
+    const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+    const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+    const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+
+    try {
+      const dirExists = await RNFS.exists(downloadDir);
+      if (!dirExists) {
+        await RNFS.mkdir(downloadDir);
+      }
+
+      const rand = Math.floor(100000 + Math.random() * 900000);
+      let filterComplex = ''; // Initialize filterComplex
+
+      // Add scaling and overlay for each overlay video
+      filterComplex += `[0:v]scale=1920x2300,setsar=1:1[v0];`; // Scale base video
+      let baseIndex1 = 1;
+      let baseIndex = 1;
+
+      textOverlayList.forEach((overlay, index) => {
+        filterComplex += `[${baseIndex}:v]scale=640:640[v${baseIndex}];`; // Scale overlay video
+        baseIndex++
+      });
+
+      textOverlayList.forEach((overlay, index) => {
+        const position = overlay.position;
+
+        filterComplex += `[v${baseIndex1 === 1 ? baseIndex1 - 1 : baseIndex1 + 1}][v${baseIndex1}]overlay=x=${position.x}:y=${position.y}[v${baseIndex1 === 1 ? baseIndex1 + 2 : baseIndex1 + 2}];`; // Overlay with position
+        baseIndex1++
+      });
+
+      // Remove trailing semicolon
+      filterComplex = filterComplex.slice(0, -1);
+
+      // let ffmpegCommand = `-i ${localUri} -i ${secondVideo} -filter_complex "[0:v]scale=1920x2300,setsar=1:1[v0];[1:v]scale=640:640[v1];[v0][v1]overlay=10:10" -c:a copy -c:v mpeg4 -crf 23 -preset veryfast ${downloadDir}/${rand + newFileName}`
+
+
+      let ffmpegCommand = `-i ${localUri} `;
+
+      // Add input for each overlay video
+      textOverlayList.forEach((overlay, index) => {
+        ffmpegCommand += `-i ${overlay.video} `;
+      });
+
+      ffmpegCommand += `-filter_complex "${filterComplex}" -map "[v4]" -c:a copy -c:v mpeg4 -crf 23 -preset veryfast ${downloadDir}/${rand + newFileName}`;
+
+      // Execute FFmpeg command
+      console.log("========================", ffmpegCommand)
+      await FFmpegKit.executeAsync(ffmpegCommand);
+      // Display success message
+      console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+    } catch (error) {
+      // Log and display error message
+      console.error('Error saving video:', error);
+      Alert.alert('Failed to download video!');
+    }
+  }
+
+
   const downloadVideo = () => {
 
     let hasImages = false;
     let hasTexts = false;
+    let hasVideo = false;
     textOverlayList.forEach((overlay) => {
       if (overlay.image) {
         hasImages = true;
       } else if (overlay.text) {
         hasTexts = true;
+      }
+      else if (overlay.video) {
+        hasVideo = true;
       }
     });
 
@@ -499,6 +632,9 @@ const App = () => {
     }
     else if (hasTexts) {
       downloadVideoONe();
+    }
+    else if (hasVideo) {
+      downloadVideowithVideo();
     } else {
 
       downloadVideoONe();
@@ -615,8 +751,140 @@ const App = () => {
     }
   };
 
+  const [frames, setFrames] = useState(); // <[{status: <FRAME_STATUS>}]>
+  const [framesLineOffset, setFramesLineOffset] = useState(0); // number
+  const [paused, setPaused] = useState(false);
+
+  const getFileNameFromPath = path => {
+    const fragments = path.split('/');
+    let fileName = fragments[fragments.length - 1];
+    fileName = fileName.split('.')[0];
+    return fileName;
+  };
+
+  const handleVideoLoad = videoAssetLoaded => {
+    const numberOfFrames = Math.ceil(videoAssetLoaded.duration);
+    setFrames(
+      Array(numberOfFrames).fill({
+        status: FRAME_STATUS.LOADING.name.description,
+      }),
+    );
+
+    FFmpegWrapper.getFrames(
+      getFileNameFromPath(videoUri),
+      videoUri,
+      numberOfFrames,
+      filePath => {
+        const _framesURI = [];
+        for (let i = 0; i < numberOfFrames; i++) {
+          _framesURI.push(
+            `${filePath.replace('%4d', String(i + 1).padStart(4, 0))}`,
+          );
+        }
+        const _frames = _framesURI.map(_frameURI => ({
+          uri: _frameURI,
+          status: FRAME_STATUS.READY.name.description,
+        }));
+        setFrames(_frames);
+      },
+    );
+  };
+
+  const renderFrame = (frame, index) => {
+    if (frame.status === FRAME_STATUS.LOADING.name.description) {
+      return <View style={styles.loadingFrame} key={index} />;
+    } else {
+      return (
+        <Image
+          key={index}
+          source={{ uri: 'file://' + frame.uri }}
+          style={{
+            width: TILE_WIDTH,
+            height: TILE_HEIGHT,
+          }}
+          onLoad={() => {
+            console.log('Image loaded');
+          }}
+        />
+      );
+    }
+  };
+
+  const getPopLinePlayTime = offset => {
+    return (
+      (offset + (DURATION_WINDOW_WIDTH * parseFloat(POPLINE_POSITION)) / 100) /
+      (FRAME_PER_SEC * TILE_WIDTH)
+    );
+  };
+
+  const handleOnScroll = ({ nativeEvent }) => {
+    const playbackTime = getPopLinePlayTime(nativeEvent.contentOffset.x);
+    videoPlayerRef.current?.seek(playbackTime);
+    setFramesLineOffset(nativeEvent.contentOffset.x);
+  };
+
+  const getLeftLinePlayTime = offset => {
+    return offset / (FRAME_PER_SEC * TILE_WIDTH);
+  };
+  const getRightLinePlayTime = offset => {
+    return (offset + DURATION_WINDOW_WIDTH) / (FRAME_PER_SEC * TILE_WIDTH);
+  };
+
+  const handleOnProgress = ({ currentTime }) => {
+    if (currentTime >= getRightLinePlayTime(framesLineOffset)) {
+      videoPlayerRef.current.seek(getLeftLinePlayTime(framesLineOffset));
+    }
+  };
+
+  const handleOnTouchEnd = () => {
+    setPaused(false);
+  };
+  const handleOnTouchStart = () => {
+    setPaused(true);
+  };
 
 
+  const [filter, setFilter] = useState(''); // Current filter
+
+  const applyFilter = async (selectedFilter) => {
+    try {
+
+
+      const isPermissionGranted = await checkWriteExternalStoragePermission();
+      if (!isPermissionGranted) {
+        const permissionGranted = await requestWriteExternalStoragePermission();
+        if (!permissionGranted) {
+          Alert.alert('Permission denied. Cannot download video.');
+          return;
+        }
+      }
+
+      // Ensure video URI exists
+      if (!videoUri) {
+        Alert.alert('No video to filter!');
+        return;
+      }
+      const downloadDir = `${RNFS.CachesDirectoryPath}`;
+
+      // Create a random output file name
+      const outputFileName = `filtered_video_${Date.now()}.mp4`;
+
+      // Construct FFmpeg command to apply the selected filter
+      const ffmpegCommand = `-i ${videoUri} -vf ${selectedFilter} -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${outputFileName}`;
+
+      // Execute FFmpeg command
+      await FFmpegKit.executeAsync(ffmpegCommand);
+
+      // Set the filtered video URI
+      setTimeout(() => {
+        setVideoUri(`${downloadDir}/${outputFileName}`);
+      }, 5000);
+      setFilter(selectedFilter);
+    } catch (error) {
+      console.error('Error applying filter:', error);
+      Alert.alert('Failed to apply filter!');
+    }
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -624,7 +892,21 @@ const App = () => {
         {videoUri ? (
           <View style={{ flex: 1 }}>
             <View style={{ height: 600 }}>
-              <VideoPlayer videoUri={videoUri} ref={videoContainerRef} mute={muteOriginalSound} toggleMuteOriginalSound={toggleMuteOriginalSound} muteOriginalSound={muteOriginalSound} />
+              <VideoPlayer videoUri={videoUri} ref={videoContainerRef} mute={muteOriginalSound} toggleMuteOriginalSound={toggleMuteOriginalSound} muteOriginalSound={muteOriginalSound}
+                trimVideo={trimVideo}
+                videoPlayerRef={videoPlayerRef}
+                handleAddText={handleAddText}
+                handleAddImage={handleAddImage}
+                addVideoOnVideo={addVideoOnVideo}
+                // addVideoOnVideo={addVideoOverVideo}
+                externalAudioUri={externalAudioUri}
+                replaceVideoAudio={replaceVideoAudio}
+                addExternalAudio={addExternalAudio}
+                handleVideoLoad={handleVideoLoad}
+                handleOnProgress={handleOnProgress}
+              />
+
+
               {textOverlayList.map((overlay, index) => (
                 <View
                   key={index}
@@ -635,29 +917,18 @@ const App = () => {
                     onPanResponderRelease: () => { },
                   }).panHandlers}
                 >
-                  {/* <PinchGestureHandler
-                    onGestureEvent={(event) => handlePinchGesture(event, index)}
-                    onHandlerStateChange={(event) => handlePinchStateChange(event, index)}
-                  > */}
-
                   {overlay.text && (
                     <Text style={[styles.overlayText, { color: colorText, fontSize: textSize }]}>{overlay.text}</Text>
                   )}
-                  {/* {overlay.image && (
-                      <Image source={{ uri: overlay.image }} style={{ width: 100, height: 100 }} />
-                    )} */}
-                  {/* <Animated.View style={{ width: '100%', height: '100%' }}> */}
                   {overlay.image && (
                     <Image source={{ uri: overlay.image }} style={{ width: 100, height: 100 }} />
-
                   )}
-                  {/* </Animated.View> */}
-                  {overlay.videoOver && (
-                    <Video source={{ uri: overlay.videoOver }}
-                      style={{ width: 200, height: 200 }}
+                  {overlay.video && (
+                    <Video source={{ uri: overlay.video }}
+                      style={{ width: 150, height: 150 }}
                       resizeMode="cover"
-                      mute={true}
-                      controls={true}
+                      mute={false}
+                      controls={false}
                     />
                   )}
                   <TouchableOpacity
@@ -669,56 +940,13 @@ const App = () => {
                       style={{ width: 20, height: 20 }}
                     />
                   </TouchableOpacity>
-                  {/* </PinchGestureHandler> */}
                 </View>
               ))}
             </View>
+
+
+
             <View style={{ width: "100%", flexDirection: "row", height: 50 }}>
-              <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
-                <TouchableOpacity
-                  style={{ backgroundColor: 'gray', margin: 5, padding: 10 }}
-                  onPress={trimVideo}
-                >
-                  <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
-                    Trim Video
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
-                <TouchableOpacity
-                  style={{ backgroundColor: 'gray', margin: 5, padding: 10 }}
-                  onPress={handleAddText}
-                >
-                  <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
-                    Add Text
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={handleAddImage}>
-                  <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
-                    Add Image
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={{ width: "100%", flexDirection: "row", height: 50 }}>
-              <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={addVideoOnVideo}>
-                  <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
-                    Add Video
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
-                {/* <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={downloadVideo}> */}
-                <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={externalAudioUri ? replaceVideoAudio : addExternalAudio}>
-                  <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
-                    {externalAudioUri ? "Convert" : "Select"} Audio
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {/* {textOverlayList[0]?.image || textOverlayList[0]?.text && ( */}
               <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
                 <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={downloadVideo}>
                   <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
@@ -726,8 +954,66 @@ const App = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
-              {/* )} */}
             </View>
+
+            <View style={{ width: '100%', flexDirection: "row", justifyContent: "space-between" }}>
+              <TouchableOpacity onPress={() => applyFilter('negate')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Negate</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('vflip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>VFlip</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('hflip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>HFlip</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('transpose=clock')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Rotate Clockwise</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('transpose=cclock')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Rotate Counterclockwise</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('transpose=clock_flip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Rotate & Flip Clockwise</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('transpose=cclock_flip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Rotate & Flip Counterclockwise</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('fade=in:0:30')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Fade In</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('fade=out:100:30')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Fade Out</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('crop=w=100:h=100:x=0:y=0')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Crop</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('scale=w=640:h=360')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Scale</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('boxblur=5:1')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Box Blur</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('hue=s=0')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Hue</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('saturation=s=2')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Saturation</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => applyFilter('drawtext=text=\'Hello World\'')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Draw Text</Text></TouchableOpacity>
+            </View>
+
+
+            {frames && (
+              <View style={styles.durationWindowAndFramesLineContainer}>
+                <View style={styles.durationWindow}>
+                  <View style={styles.durationLabelContainer}>
+                    <Text style={styles.durationLabel}>
+                      {DURATION_WINDOW_DURATION} sec .
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.popLineContainer}>
+                  <View style={styles.popLine} />
+                </View>
+                <View style={styles.durationWindowLeftBorder} />
+                <View style={styles.durationWindowRightBorder} />
+                <ScrollView
+                  onScroll={handleOnScroll}
+                  showsHorizontalScrollIndicator={false}
+                  horizontal={true}
+                  style={styles.framesLine}
+                  alwaysBounceHorizontal={true}
+                  scrollEventThrottle={1}
+                  onTouchStart={handleOnTouchStart}
+                  onTouchEnd={handleOnTouchEnd}
+                  onMomentumScrollEnd={handleOnTouchEnd}
+                >
+                  <View style={styles.prependFrame} />
+                  {frames.map((frame, index) => renderFrame(frame, index))}
+                  <View style={styles.appendFrame} />
+                  <TouchableOpacity onPress={addVideoOnVideo} style={{ width: 80, height: 80, justifyContent: "center", alignItems: "center" }}>
+                    <Image
+                      source={{ uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSenNhboidQCgRv-9bJAl-wA5H_6M8EiQZqNOWYlr_IbQ&s" }}
+                      style={{ width: 50, height: 50 }}
+                      resizeMode='contain'
+                    />
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            )}
+
 
             {textOverlayList[0]?.text && (
               <>
@@ -786,7 +1072,6 @@ const App = () => {
                 </TouchableOpacity>
 
                 <View style={{ paddingVertical: 10 }}></View>
-                {/* <Button title="Select Image" onPress={() => { }} /> */}
                 <View style={{ paddingVertical: 10 }}></View>
                 <TouchableOpacity style={{ flex: 1, width: "100%", height: 100, justifyContent: "center", alignItems: "center" }} onPress={recordvideo}>
                   <Image source={{ uri: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQazmivuQhs1BJsOI5sLWQ3yIvbn6LMOUukwWg5Go8cmw&s' }} resizeMode='contain' style={{ width: 100, height: 100 }} />
@@ -865,16 +1150,52 @@ const App = () => {
   );
 };
 
-const VideoPlayer = forwardRef(({ videoUri, mute, toggleMuteOriginalSound, muteOriginalSound }, ref) => {
+const VideoPlayer = forwardRef(({ videoUri, mute, toggleMuteOriginalSound, muteOriginalSound, trimVideo, handleAddText, handleAddImage, addVideoOnVideo, handleOnProgress, externalAudioUri, replaceVideoAudio, addExternalAudio, handleVideoLoad, videoPlayerRef }, ref) => {
   return (
     <View style={{ flex: 1 }} ref={ref}>
       <Video
         source={{ uri: videoUri }}
         style={{ width: "100%", height: 600, backgroundColor: "black" }}
+        ref={videoPlayerRef}
         resizeMode="contain"
         controls={true}
         muted={mute}
+        onLoad={handleVideoLoad}
+        onProgress={handleOnProgress}
       />
+
+      <View style={{ flexDirection: 'column', justifyContent: 'center', alignItems: 'center', position: "absolute", zIndex: 999, top: 10, right: 10, padding: 5 }}>
+        <TouchableOpacity onPress={trimVideo} style={{ backgroundColor: "white", width: 50, height: 50, justifyContent: "center", alignItems: "center", marginTop: 10 }}>
+          <Image
+            source={{ uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSY0bNuRpWzRG-B_3lhns55Nh-W4VXkWlO8kQPuBMH41Q&s" }}
+            style={{ width: 40, height: 40 }} resizeMode='contain'
+          />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleAddText} style={{ backgroundColor: "white", width: 50, height: 50, justifyContent: "center", alignItems: "center", marginTop: 10 }}>
+          <Image
+            source={{ uri: "https://cdn-icons-png.flaticon.com/512/5304/5304238.png" }}
+            style={{ width: 40, height: 40, }} resizeMode='contain'
+          />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleAddImage} style={{ backgroundColor: "white", width: 50, height: 50, justifyContent: "center", alignItems: "center", marginTop: 10 }}>
+          <Image
+            source={{ uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRwlVPoCclWj0LPLQOx4QgSmvoJnRp6XsThgX7-Y5Mixg&s" }}
+            style={{ width: 40, height: 40, }} resizeMode='contain'
+          />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={addVideoOnVideo} style={{ backgroundColor: "white", width: 50, height: 50, justifyContent: "center", alignItems: "center", marginTop: 10 }}>
+          <Image
+            source={{ uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSenNhboidQCgRv-9bJAl-wA5H_6M8EiQZqNOWYlr_IbQ&s" }}
+            style={{ width: 50, height: 50, }} resizeMode='contain'
+          />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={externalAudioUri ? replaceVideoAudio : addExternalAudio} style={{ backgroundColor: "white", width: 50, height: 50, justifyContent: "center", alignItems: "center", marginTop: 10 }}>
+          <Image
+            source={{ uri: "https://cdn4.iconfinder.com/data/icons/audio-ui/24/_add-512.png" }}
+            style={{ width: 50, height: 50, }} resizeMode='contain'
+          />
+        </TouchableOpacity>
+      </View>
 
       {videoUri && (
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', position: "absolute", zIndex: 999, backgroundColor: 'white', bottom: 10, right: 10, padding: 5 }}>
@@ -944,6 +1265,96 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: 'white',
     fontSize: 16,
+  },
+  framesLine: {
+    width: SCREEN_WIDTH,
+    // backgroundColor: "red",
+    // height: 50
+  },
+  loadingFrame: {
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderWidth: 1,
+  },
+  durationWindowAndFramesLineContainer: {
+    top: -DURATION_WINDOW_BORDER_WIDTH,
+    width: SCREEN_WIDTH,
+    height: TILE_HEIGHT + DURATION_WINDOW_BORDER_WIDTH * 2,
+    justifyContent: 'center',
+    zIndex: 10,
+    backgroundColor: "lightgray",
+    marginTop: 20
+  },
+  durationWindow: {
+    width: DURATION_WINDOW_WIDTH,
+    borderColor: 'yellow',
+    borderWidth: DURATION_WINDOW_BORDER_WIDTH,
+    borderRadius: 4,
+    height: TILE_HEIGHT + DURATION_WINDOW_BORDER_WIDTH * 2,
+    alignSelf: 'center',
+  },
+  durationLabelContainer: {
+    backgroundColor: 'yellow',
+    alignSelf: 'center',
+    top: -26,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  durationLabel: {
+    color: 'rgba(0,0,0,0.6)',
+    fontWeight: '700',
+  },
+  popLineContainer: {
+    position: 'absolute',
+    alignSelf: POPLINE_POSITION === '50%' && 'center',
+    zIndex: 25,
+  },
+  popLine: {
+    width: 3,
+    height: TILE_HEIGHT,
+    backgroundColor: 'yellow',
+  },
+  durationWindowLeftBorder: {
+    position: 'absolute',
+    width: DURATION_WINDOW_BORDER_WIDTH,
+    alignSelf: 'center',
+    height: TILE_HEIGHT + DURATION_WINDOW_BORDER_WIDTH * 2,
+    left: SCREEN_WIDTH / 2 - DURATION_WINDOW_WIDTH / 2,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+    backgroundColor: 'yellow',
+    zIndex: 25,
+  },
+  durationWindowRightBorder: {
+    position: 'absolute',
+    width: DURATION_WINDOW_BORDER_WIDTH,
+    right: SCREEN_WIDTH - SCREEN_WIDTH / 2 - DURATION_WINDOW_WIDTH / 2,
+    height: TILE_HEIGHT + DURATION_WINDOW_BORDER_WIDTH * 2,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    backgroundColor: 'yellow',
+    zIndex: 25,
+  },
+  framesLine: {
+    width: SCREEN_WIDTH,
+    position: 'absolute',
+  },
+  loadingFrame: {
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderWidth: 1,
+  },
+  prependFrame: {
+    width: SCREEN_WIDTH / 2 - DURATION_WINDOW_WIDTH / 2,
+  },
+  appendFrame: {
+    width: SCREEN_WIDTH / 2 - DURATION_WINDOW_WIDTH / 2,
   },
 });
 
