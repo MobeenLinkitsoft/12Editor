@@ -565,7 +565,7 @@ const App = () => {
       let filterComplex = ''; // Initialize filterComplex
 
       // Add scaling and overlay for each overlay video
-      filterComplex += `[0:v]scale=1920x2300,setsar=1:1[v0];`; // Scale base video
+      filterComplex += `[0:v]scale=1920x2500,setsar=1:1[v0];`; // Scale base video
       let baseIndex1 = 1;
       let baseIndex = 1;
 
@@ -594,7 +594,7 @@ const App = () => {
         ffmpegCommand += `-i ${overlay.video} `;
       });
 
-      ffmpegCommand += `-filter_complex "${filterComplex}" -map "[v4]" -c:a copy -c:v mpeg4 -crf 23 -preset veryfast ${downloadDir}/${rand + newFileName}`;
+      ffmpegCommand += `-filter_complex "${filterComplex}" -map "[v${baseIndex + 1}]" -c:a copy -c:v mpeg4 -crf 23 -preset veryfast ${downloadDir}/${rand + newFileName}`;
 
       // Execute FFmpeg command
       console.log("========================", ffmpegCommand)
@@ -608,6 +608,103 @@ const App = () => {
     }
   }
 
+  const downloadVideoWithAllOverlays = async () => {
+    // Check if video URI exists
+    if (!videoUri) {
+      Alert.alert('No video to download!');
+      return;
+    }
+
+    const isPermissionGranted = await checkWriteExternalStoragePermission();
+    if (!isPermissionGranted) {
+      const permissionGranted = await requestWriteExternalStoragePermission();
+      if (!permissionGranted) {
+        Alert.alert('Permission denied. Cannot download video.');
+        return;
+      }
+    }
+
+    // Extract file extension and generate new file name
+    const localUri = videoUri.replace('file://', '');
+    const fileExtension = localUri.split('.').pop();
+    const datetime = new Date().toLocaleTimeString().replace(':', '').replace(' ', '');
+    const newFileName = `${datetime}overlayed_video.${fileExtension}`;
+    // Specify download directory
+    const downloadDir = `${RNFS.DownloadDirectoryPath}`;
+
+    try {
+      // Check if download directory exists, if not, create it
+      const dirExists = await RNFS.exists(downloadDir);
+      if (!dirExists) {
+        await RNFS.mkdir(downloadDir);
+      }
+
+      // Construct FFmpeg filter_complex string with dynamic text and image overlay filters
+      let filterComplex = '';
+      let filterComplexVideo = '';
+      let filterComplexText = '';
+      let overlayInputs = '';
+      let overlayMap = '';
+      let countss = 1;
+      let countss2 = 1;
+      const rand = Math.floor(100000 + Math.random() * 900000);
+
+      // Loop through each overlay in textOverlayList
+      textOverlayList.forEach((overlay, index) => {
+        if (overlay.image || overlay.video) {
+          const imagePath = overlay.image;
+          const position = overlay.position;
+          const overlayInput = `-i ${imagePath} `;
+          overlayInputs += overlayInput;
+
+          filterComplex += `[${countss}:v]scale=200:200[ovrl${countss}];`;
+          countss++;
+        }
+      });
+
+      textOverlayList.forEach((overlay, index) => {
+        if (overlay.image || overlay.video) {
+          const videoPath = overlay.video;
+          const position1 = overlay.position;
+          const overlayInput1 = `-i ${videoPath} `;
+          overlayInputs += overlayInput1;
+
+          filterComplexVideo += `${countss2 == 1 ? `[0:v]` : `[ovrl${countss}]`}[ovrl${countss2}]overlay=x=${position1.x}:y=${position1.y}${index !== textOverlayList.length - 1 ? `[ovrl${countss + 1}]` : ''}${index !== textOverlayList.length - 1 ? ';' : ','}`;
+          countss2++;
+          countss++;
+        }
+
+      });
+
+
+      textOverlayList.forEach((overlay, index) => {
+        if (overlay.text) {
+
+          const text = overlay.text;
+          const position2 = overlay.position;
+
+          filterComplexText += `drawtext=fontfile=/system/fonts/Roboto-Regular.ttf:text=${text}:fontcolor=red:fontsize=24:x=${position2.x}:y=${position2.y}${index !== textOverlayList.length - 1 ? ',' : ''}`;
+        }
+      });
+
+      filterComplexText = filterComplexText.slice(0, filterComplexText.length - 1)
+
+      // Construct the FFmpeg command
+      const ffmpegCommand = `-y -i ${localUri} ${textOverlayList.map((overlay, index) => overlay.image && `-i ${overlay.image}`).join(' ')}  ${textOverlayList.map((overlay, index) => overlay.video && `-i ${overlay.video}`).join(' ')} -filter_complex "${filterComplex}${filterComplexVideo}${filterComplexText}" -map 0:a -q:v 4 -q:a 4 -pix_fmt yuv420p ${downloadDir}/${rand + newFileName}`;
+
+      // Execute FFmpeg command
+      Timer("Video Downloaded!")
+
+      await FFmpegKit.executeAsync(ffmpegCommand);
+      console.log("ffmpegCommand=====================", ffmpegCommand)
+      // Display success message
+      console.log(`Video downloaded successfully! Location: ${downloadDir}/${newFileName}`);
+    } catch (error) {
+      // Log and display error message
+      console.error('Error saving video:', error);
+      Alert.alert('Failed to download video!');
+    }
+  };
 
   const downloadVideo = () => {
 
@@ -626,16 +723,21 @@ const App = () => {
     });
 
     if (hasImages && hasTexts) {
+      console.log("first----------------------------", 1)
       downloadVideoBoth();
     } else if (hasImages) {
+      console.log("first----------------------------", 2)
       downloadVideoONe();
     }
     else if (hasTexts) {
+      console.log("first----------------------------", 3)
       downloadVideoONe();
     }
     else if (hasVideo) {
+      console.log("first----------------------------", 4)
       downloadVideowithVideo();
     } else {
+      console.log("first----------------------------", 5)
 
       downloadVideoONe();
     }
@@ -897,8 +999,8 @@ const App = () => {
                 videoPlayerRef={videoPlayerRef}
                 handleAddText={handleAddText}
                 handleAddImage={handleAddImage}
-                addVideoOnVideo={addVideoOnVideo}
-                // addVideoOnVideo={addVideoOverVideo}
+                // addVideoOnVideo={addVideoOnVideo}
+                addVideoOnVideo={addVideoOverVideo}
                 externalAudioUri={externalAudioUri}
                 replaceVideoAudio={replaceVideoAudio}
                 addExternalAudio={addExternalAudio}
@@ -921,13 +1023,13 @@ const App = () => {
                     <Text style={[styles.overlayText, { color: colorText, fontSize: textSize }]}>{overlay.text}</Text>
                   )}
                   {overlay.image && (
-                    <Image source={{ uri: overlay.image }} style={{ width: 100, height: 100 }} />
+                    <Image source={{ uri: overlay.image }} style={{ width: 150, height: 150 }} />
                   )}
                   {overlay.video && (
                     <Video source={{ uri: overlay.video }}
                       style={{ width: 150, height: 150 }}
                       resizeMode="cover"
-                      mute={false}
+                      mute={true}
                       controls={false}
                     />
                   )}
@@ -948,7 +1050,7 @@ const App = () => {
 
             <View style={{ width: "100%", flexDirection: "row", height: 50 }}>
               <View style={{ flex: 1, alignSelf: "center", justifyContent: "center" }}>
-                <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={downloadVideo}>
+                <TouchableOpacity style={{ backgroundColor: 'gray', margin: 5, padding: 10 }} onPress={downloadVideoWithAllOverlays}>
                   <Text style={{ textAlign: "center", color: "white", fontSize: 16 }}>
                     Download Video
                   </Text>
@@ -956,7 +1058,7 @@ const App = () => {
               </View>
             </View>
 
-            <View style={{ width: '100%', flexDirection: "row", justifyContent: "space-between" }}>
+            {/* <View style={{ width: '100%', flexDirection: "row", justifyContent: "space-between" }}>
               <TouchableOpacity onPress={() => applyFilter('negate')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Negate</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('vflip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>VFlip</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('hflip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>HFlip</Text></TouchableOpacity>
@@ -965,6 +1067,8 @@ const App = () => {
               <TouchableOpacity onPress={() => applyFilter('transpose=clock_flip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Rotate & Flip Clockwise</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('transpose=cclock_flip')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Rotate & Flip Counterclockwise</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('fade=in:0:30')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Fade In</Text></TouchableOpacity>
+            </View>
+            <View style={{ width: '100%', flexDirection: "row", justifyContent: "space-between" }}>
               <TouchableOpacity onPress={() => applyFilter('fade=out:100:30')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Fade Out</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('crop=w=100:h=100:x=0:y=0')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Crop</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('scale=w=640:h=360')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Scale</Text></TouchableOpacity>
@@ -972,10 +1076,10 @@ const App = () => {
               <TouchableOpacity onPress={() => applyFilter('hue=s=0')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Hue</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('saturation=s=2')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Saturation</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => applyFilter('drawtext=text=\'Hello World\'')} style={{ width: 50, height: 50, backgroundColor: "green" }}><Text style={{ fontSize: 16, color: "red" }}>Draw Text</Text></TouchableOpacity>
-            </View>
+            </View> */}
 
 
-            {frames && (
+            {/* {frames && (
               <View style={styles.durationWindowAndFramesLineContainer}>
                 <View style={styles.durationWindow}>
                   <View style={styles.durationLabelContainer}>
@@ -1012,7 +1116,7 @@ const App = () => {
                   </TouchableOpacity>
                 </ScrollView>
               </View>
-            )}
+            )} */}
 
 
             {textOverlayList[0]?.text && (
